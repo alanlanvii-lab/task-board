@@ -195,31 +195,38 @@ try{
   const urlBoard = new URLSearchParams(location.search).get('board');
   if(urlBoard){ boardId = urlBoard.trim(); localStorage.setItem('board-id', boardId); }
 }catch(e){}
-const API = 'https://jsonblob.com/api/jsonBlob/';
+
+// jsonbin.io の共有APIキー(このボード専用・読み書き用)
+const BIN_KEY = '$2a$10$UYuGXOgMkVxhaQvB2C4dP.WaSRuqqa8Fg6trnjgxBIarvX5prbIjq';
+const BIN_API = 'https://api.jsonbin.io/v3/b';
 
 async function cloudGet(){
   if(!boardId) return null;
-  const r = await fetch(API + boardId, {headers:{'Accept':'application/json'}});
+  const r = await fetch(BIN_API + '/' + boardId + '/latest', {headers:{'X-Master-Key':BIN_KEY}});
   if(!r.ok) throw new Error('board not found');
-  return await r.json();
+  const j = await r.json();
+  return j.record;
 }
 async function cloudPut(data){
   if(!boardId) return;
-  await fetch(API + boardId, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+  await fetch(BIN_API + '/' + boardId, {method:'PUT', headers:{'Content-Type':'application/json','X-Master-Key':BIN_KEY}, body: JSON.stringify(data)});
 }
 async function createBoard(){
+  if(BIN_KEY === '__MASTER_' + 'KEY__'){
+    toast('APIキーが未設定です','管理者向け: BIN_KEY を設定してください'); return;
+  }
   try{
-    const r = await fetch('https://jsonblob.com/api/jsonBlob', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(state)});
-    const loc = r.headers.get('Location') || '';
-    const id = loc.split('/').pop();
+    const r = await fetch(BIN_API, {method:'POST', headers:{'Content-Type':'application/json','X-Master-Key':BIN_KEY,'X-Bin-Name':'meteor-board'}, body: JSON.stringify(state)});
+    const j = await r.json();
+    const id = j.metadata && j.metadata.id;
     if(!id) throw new Error('no id');
     boardId = id;
     try{ localStorage.setItem('board-id', boardId); }catch(e){}
     dlgBoard.close(); render();
     const shareUrl = location.origin.startsWith('http') ? location.origin + location.pathname + '?board=' + boardId : '';
-    prompt('このボードIDをメンバーに共有してください' + (shareUrl?'(URLごと送ると開くだけで接続されます)':''), shareUrl || boardId);
+    prompt('このリンクをメンバーに共有してください(開くだけで接続されます)', shareUrl || boardId);
   }catch(e){
-    toast('ボード作成に失敗しました','通信環境を確認してください');
+    toast('ボード作成に失敗しました','APIキーと通信環境を確認してください');
   }
 }
 async function joinBoard(){

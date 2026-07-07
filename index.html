@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ミーティア board — みんなのタスク管理</title>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=IBM+Plex+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#1E2030; --panel:#2A2D45; --panel2:#333756; --ink:#F2F3FA; --sub:#9DA3C4;
+  --accent:#7C8CFF; --mint:#5FD6A5; --amber:#FFC46B; --rose:#FF7C93;
+  --line:#3D4163; --mono:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans JP',sans-serif;font-size:14px;line-height:1.7;min-height:100vh}
+header{padding:18px 22px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{font-family:'M PLUS Rounded 1c';font-weight:800;font-size:21px;letter-spacing:.02em}
+header h1 span{color:var(--accent)}
+.me{display:flex;align-items:center;gap:8px;margin-left:auto}
+.me select{background:var(--panel);border:1px solid var(--line);color:var(--ink);font-family:inherit;font-size:13px;padding:7px 12px;border-radius:10px;min-width:120px}
+.hookdot{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);cursor:pointer;background:var(--panel);padding:7px 12px;border-radius:10px;border:1px solid var(--line)}
+.hookdot .dot{width:8px;height:8px;border-radius:50%;background:var(--rose)}
+.hookdot.on .dot{background:var(--mint)}
+.toolbar{padding:0 22px 10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.toolbar input,.toolbar select{background:var(--panel);border:1px solid var(--line);color:var(--ink);font-family:inherit;font-size:13px;padding:9px 12px;border-radius:10px}
+#newTitle{flex:1;min-width:180px}
+button{font-family:'M PLUS Rounded 1c';font-weight:700;font-size:13px;border:none;border-radius:10px;padding:9px 18px;cursor:pointer;background:var(--accent);color:#161830}
+button:hover{filter:brightness(1.1)}
+button.ghost{background:var(--panel);color:var(--sub);border:1px solid var(--line)}
+.namebar{display:flex;gap:8px;align-items:center;padding:0 22px 12px;flex-wrap:wrap}
+.namebar .lbl{font-size:12px;color:var(--sub)}
+.dragchip{background:rgba(124,140,255,.16);color:var(--accent);border:1px solid var(--line);padding:4px 14px;border-radius:99px;font-size:13px;font-weight:500;cursor:grab;user-select:none}
+.dragchip:active{cursor:grabbing}
+.dragchip.all{background:rgba(255,196,107,.16);color:var(--amber)}
+.board{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:0 22px 30px;align-items:start}
+.col{background:var(--panel);border-radius:16px;padding:14px;min-height:160px}
+.col.dragover{outline:2px dashed var(--accent);outline-offset:-4px}
+.col h2{font-family:'M PLUS Rounded 1c';font-weight:700;font-size:14px;color:var(--sub);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.col h2::before{content:'#';color:var(--accent);font-weight:800}
+.col h2 .n{margin-left:auto;font-family:var(--mono);font-size:12px;background:var(--panel2);padding:1px 9px;border-radius:99px}
+.col h2 .note{font-size:10px;font-weight:400;color:var(--sub)}
+.task{background:var(--panel2);border-radius:12px;padding:11px 12px;margin-bottom:9px;border:1px solid transparent;cursor:grab}
+.task:hover{border-color:var(--line)}
+.task.dragging{opacity:.4}
+.task.dropTarget{border-color:var(--accent);box-shadow:0 0 0 2px rgba(124,140,255,.35)}
+.task .t{font-weight:500;margin-bottom:5px;word-break:break-word}
+.task.done .t{color:var(--sub);text-decoration:line-through}
+.task .memo{font-size:12px;color:var(--sub);background:rgba(0,0,0,.16);border-left:3px solid var(--line);border-radius:0 8px 8px 0;padding:4px 10px;margin:6px 0;white-space:pre-wrap;word-break:break-word}
+.task .meta{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--sub);flex-wrap:wrap}
+.task .who{background:rgba(124,140,255,.16);color:var(--accent);padding:0 8px;border-radius:99px;font-weight:500;display:inline-flex;align-items:center;gap:4px}
+.task .who.ok{background:rgba(95,214,165,.16);color:var(--mint)}
+.task .who.not{background:var(--panel);color:var(--sub);border:1px dashed var(--line)}
+.task .who .rm{cursor:pointer;opacity:.5;font-size:11px}
+.task .who .rm:hover{opacity:1;color:var(--rose)}
+.task .due{font-family:var(--mono);font-size:11px}
+.task .due.over{color:var(--rose)}
+.task .due.soon{color:var(--amber)}
+.task .acts{display:flex;gap:6px;margin-top:9px}
+.task .acts button{font-size:11px;padding:4px 11px;border-radius:8px}
+.task .acts .fwd{background:var(--mint);color:#12301f}
+.task .acts .bwd{background:var(--panel);color:var(--sub);border:1px solid var(--line)}
+.task .acts .edit{background:var(--panel);color:var(--sub);border:1px solid var(--line)}
+.task .acts .del{background:transparent;color:var(--sub);margin-left:auto}
+.task .acts .del:hover{color:var(--rose)}
+.empty{color:var(--sub);font-size:12px;text-align:center;padding:20px 0}
+.toast{position:fixed;bottom:18px;right:18px;background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;padding:12px 16px;max-width:320px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:0;transform:translateY(8px);transition:.25s;pointer-events:none;z-index:99}
+.toast.show{opacity:1;transform:none}
+.toast .tt{font-family:'M PLUS Rounded 1c';font-weight:700;font-size:12px;color:var(--accent);margin-bottom:3px}
+dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:22px;max-width:460px;width:92%}
+dialog::backdrop{background:rgba(10,12,24,.65)}
+dialog h3{font-family:'M PLUS Rounded 1c';font-size:16px;margin-bottom:8px}
+dialog p{font-size:13px;color:var(--sub);margin-bottom:12px}
+dialog input,dialog select,dialog textarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);font-family:inherit;font-size:13px;padding:10px 12px;border-radius:10px;margin-bottom:10px}
+dialog textarea{resize:vertical;min-height:70px}
+dialog label{font-size:12px;color:var(--sub);display:block;margin-bottom:3px}
+dialog .row{display:flex;gap:8px;justify-content:flex-end}
+.memlist{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.memchip{background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:3px 12px;font-size:12px;display:flex;align-items:center;gap:6px}
+.memchip button{background:none;color:var(--sub);padding:0;font-size:13px}
+.memchip button:hover{color:var(--rose)}
+.sync{font-family:var(--mono);font-size:11px;color:var(--sub);padding:0 22px 20px}
+@media(max-width:700px){.board{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>ミーティア <span>board</span></h1>
+  <div class="hookdot" id="boarddot" onclick="openBoard()"><span class="dot"></span><span id="boardlabel">ボード: 未接続</span></div>
+  <div class="hookdot" id="hookdot" onclick="openHook()"><span class="dot"></span><span id="hooklabel">Discord通知: 未設定</span></div>
+  <div class="hookdot" onclick="dlgMem.showModal()">👥 メンバー管理</div>
+  <div class="me">
+    <label style="font-size:12px;color:var(--sub)">自分</label>
+    <select id="myname" onchange="saveName()"><option value="">選んでね</option></select>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input id="newTitle" placeholder="新しいタスク(例: サムネ案を3つ出す)" onkeydown="if(event.key==='Enter')addTask()">
+  <input id="newDue" type="date" title="締切">
+  <button onclick="addTask()">追加する</button>
+  <select id="filterWho" onchange="render()" title="表示する担当者を絞り込み"><option value="">表示: すべて</option></select>
+  <button class="ghost" onclick="load(true)">最新に更新</button>
+</div>
+
+<div class="namebar" id="namebar"><span class="lbl">名前をタスクにドラッグで担当に追加 →</span></div>
+
+<div class="board">
+  <div class="col" ondragover="colOver(event,this)" ondragleave="colLeave(this)" ondrop="colDrop(event,this,0)"><h2>やること<span class="n" id="n0">0</span></h2><div id="c0"></div></div>
+  <div class="col" ondragover="colOver(event,this)" ondragleave="colLeave(this)" ondrop="colDrop(event,this,2)"><h2>完了 <span class="note">(1週間で自動削除)</span><span class="n" id="n2">0</span></h2><div id="c2"></div></div>
+</div>
+<div class="sync" id="sync">同期待機中…</div>
+
+<div class="toast" id="toast"><div class="tt" id="toastTitle"></div><div id="toastBody"></div></div>
+
+<dialog id="dlgBoard">
+  <h3>ボードに接続</h3>
+  <p>チームで同じボードを見るための設定です。<b>誰か1人</b>が「新しいボードを作成」してIDを発行し、そのIDをメンバー全員に共有してください(DiscordにコピペでOK)。</p>
+  <button onclick="createBoard()" style="width:100%;margin-bottom:12px">新しいボードを作成</button>
+  <label>または、共有されたボードIDを貼り付け</label>
+  <input id="boardInput" placeholder="例: 1234567890123456789">
+  <div class="row">
+    <button class="ghost" onclick="dlgBoard.close()">閉じる</button>
+    <button onclick="joinBoard()">接続する</button>
+  </div>
+</dialog>
+
+<dialog id="dlgHook">
+  <h3>Discord通知の設定</h3>
+  <p>通知を送りたいDiscordチャンネルの「設定(⚙)→連携サービス→ウェブフック→新しいウェブフック→URLをコピー」で取得したURLを貼り付けてください。この設定はボードの全員に共有されます。</p>
+  <input id="hookInput" placeholder="https://discord.com/api/webhooks/...">
+  <div class="row">
+    <button class="ghost" onclick="dlgHook.close()">閉じる</button>
+    <button onclick="saveHook()">保存する</button>
+  </div>
+</dialog>
+
+<dialog id="dlgMem">
+  <h3>メンバー管理</h3>
+  <p>ここで一度登録すれば、全員がプルダウンから名前を選ぶだけで使えます。Discord IDを登録すると、リマインダーで未完了の人にメンション(@通知)が飛びます。</p>
+  <div class="memlist" id="memlist"></div>
+  <label>名前</label>
+  <input id="memInput" placeholder="例: らぴす担">
+  <label>Discord ユーザーID(任意・数字のみ)</label>
+  <input id="memIdInput" placeholder="例: 123456789012345678" onkeydown="if(event.key==='Enter')addMember()">
+  <p style="font-size:11px;margin-bottom:10px">IDの調べ方: Discordの設定→詳細設定→「開発者モード」をON → メンバーを右クリック→「ユーザーIDをコピー」</p>
+  <div class="row">
+    <button class="ghost" onclick="dlgMem.close()">閉じる</button>
+    <button onclick="addMember()">追加する</button>
+  </div>
+</dialog>
+
+<dialog id="dlgEdit">
+  <h3>タスクを編集</h3>
+  <label>タイトル</label>
+  <input id="editTitle">
+  <label>締切</label>
+  <input id="editDue" type="date">
+  <label>メモ(参考リンク・補足など)</label>
+  <textarea id="editMemo" placeholder="例: 参考→ https://... / 〇〇の確認待ち"></textarea>
+  <p style="margin:0 0 10px;font-size:12px">担当者の追加は名前チップのドラッグ、外すのは担当チップの×でできます。</p>
+  <div class="row">
+    <button class="ghost" onclick="dlgEdit.close()">キャンセル</button>
+    <button onclick="saveEdit()">保存する</button>
+  </div>
+</dialog>
+
+<script>
+const dlgBoard = document.getElementById('dlgBoard');
+const dlgHook = document.getElementById('dlgHook');
+const dlgMem = document.getElementById('dlgMem');
+const dlgEdit = document.getElementById('dlgEdit');
+const WEEK = 7*24*60*60*1000;
+let state = { tasks: [], webhook: '', members: [], lastReminder: '' };
+let myName = '';
+let editingId = null;
+
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function toast(title, body){
+  document.getElementById('toastTitle').textContent = title;
+  document.getElementById('toastBody').textContent = body;
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3200);
+}
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function tomorrowStr(){ const d=new Date(Date.now()+86400000); return d.toISOString().slice(0,10); }
+
+/* ---------- 保存レイヤー(Claude内 or クラウド) ---------- */
+const hasClaude = (typeof window.storage !== 'undefined' && window.storage && window.storage.get);
+let boardId = '';
+try{ boardId = localStorage.getItem('board-id') || ''; }catch(e){}
+// URLに ?board=ID があれば自動接続(共有リンク用)
+try{
+  const urlBoard = new URLSearchParams(location.search).get('board');
+  if(urlBoard){ boardId = urlBoard.trim(); localStorage.setItem('board-id', boardId); }
+}catch(e){}
+const API = 'https://jsonblob.com/api/jsonBlob/';
+
+async function cloudGet(){
+  if(!boardId) return null;
+  const r = await fetch(API + boardId, {headers:{'Accept':'application/json'}});
+  if(!r.ok) throw new Error('board not found');
+  return await r.json();
+}
+async function cloudPut(data){
+  if(!boardId) return;
+  await fetch(API + boardId, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+}
+async function createBoard(){
+  try{
+    const r = await fetch('https://jsonblob.com/api/jsonBlob', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(state)});
+    const loc = r.headers.get('Location') || '';
+    const id = loc.split('/').pop();
+    if(!id) throw new Error('no id');
+    boardId = id;
+    try{ localStorage.setItem('board-id', boardId); }catch(e){}
+    dlgBoard.close(); render();
+    const shareUrl = location.origin.startsWith('http') ? location.origin + location.pathname + '?board=' + boardId : '';
+    prompt('このボードIDをメンバーに共有してください' + (shareUrl?'(URLごと送ると開くだけで接続されます)':''), shareUrl || boardId);
+  }catch(e){
+    toast('ボード作成に失敗しました','通信環境を確認してください');
+  }
+}
+async function joinBoard(){
+  const id = document.getElementById('boardInput').value.trim();
+  if(!id) return;
+  boardId = id;
+  try{ localStorage.setItem('board-id', boardId); }catch(e){}
+  dlgBoard.close();
+  await load(true);
+}
+function openBoard(){
+  document.getElementById('boardInput').value = boardId || '';
+  dlgBoard.showModal();
+}
+
+/* ---------- データ移行(旧形式who→whos配列) ---------- */
+function migrate(){
+  state.members = (state.members||[]).map(m => typeof m === 'string' ? {name: m, discordId: ''} : m);
+  state.tasks.forEach(t=>{
+    if(!Array.isArray(t.whos)){
+      if(t.who === '全員') t.whos = [...state.members];
+      else if(t.who) t.whos = [t.who];
+      else t.whos = [];
+      delete t.who;
+    }
+    if(!Array.isArray(t.doneBy)) t.doneBy = [];
+  });
+}
+
+function cleanup(){
+  const cutoff = Date.now() - WEEK;
+  const before = state.tasks.length;
+  state.tasks = state.tasks.filter(t => !(t.s===2 && (t.doneAt||0) < cutoff));
+  return state.tasks.length !== before;
+}
+
+async function load(manual){
+  if(hasClaude){
+    try{
+      const r = await window.storage.get('board-data', true);
+      if(r && r.value) state = Object.assign({tasks:[],webhook:'',members:[],lastReminder:''}, JSON.parse(r.value));
+    }catch(e){}
+    try{
+      const n = await window.storage.get('my-name');
+      if(n && n.value) myName = n.value;
+    }catch(e){}
+  } else {
+    if(boardId){
+      try{
+        const data = await cloudGet();
+        if(data) state = Object.assign({tasks:[],webhook:'',members:[],lastReminder:''}, data);
+      }catch(e){
+        toast('ボードに接続できませんでした','IDが正しいか確認してください');
+      }
+    }
+    try{ myName = localStorage.getItem('my-name') || ''; }catch(e){}
+  }
+  migrate();
+  let dirty = cleanup();
+  if(await dailyReminder()) dirty = true;
+  if(dirty) await save();
+  render();
+  document.getElementById('sync').textContent = '最終同期: ' + new Date().toLocaleTimeString('ja-JP');
+  if(manual) toast('更新しました','ボードを最新の状態にしました');
+}
+
+async function dailyReminder(){
+  if(!state.webhook) return false;
+  const today = todayStr();
+  if(state.lastReminder === today) return false;
+  const tmr = tomorrowStr();
+  const over = [], dueToday = [], dueTmr = [];
+  state.tasks.forEach(t=>{
+    if(t.s===2 || !t.due) return;
+    if(t.due < today) over.push(t);
+    else if(t.due === today) dueToday.push(t);
+    else if(t.due === tmr) dueTmr.push(t);
+  });
+  if(over.length+dueToday.length+dueTmr.length === 0){ state.lastReminder = today; return true; }
+  const line = (t, ping) => {
+    const undone = (t.whos||[]).filter(m=>!(t.doneBy||[]).includes(m));
+    const names = undone.length ? undone.map(n=>mention(n, ping)).join(' ') : '担当未定';
+    return `> ${t.title} → ${names}`;
+  };
+  let msg = '⏰ **今日の締切チェック**\n';
+  if(over.length) msg += `\n🔴 期限切れ ${over.length}件\n` + over.map(t=>line(t,true)).join('\n');
+  if(dueToday.length) msg += `\n🟡 今日締切 ${dueToday.length}件\n` + dueToday.map(t=>line(t,true)).join('\n');
+  if(dueTmr.length) msg += `\n🟢 明日締切 ${dueTmr.length}件\n` + dueTmr.map(t=>line(t,false)).join('\n');
+  state.lastReminder = today;
+  sendHook(msg, 'リマインダーを送信しました');
+  return true;
+}
+
+async function save(){
+  if(hasClaude){
+    try{ await window.storage.set('board-data', JSON.stringify(state), true); }
+    catch(e){ toast('保存に失敗しました','通信環境を確認してもう一度試してください'); }
+  } else {
+    if(!boardId){ toast('先にボードに接続してください','左上の「ボード: 未接続」から作成または接続'); return; }
+    try{ await cloudPut(state); }
+    catch(e){ toast('保存に失敗しました','通信環境を確認してもう一度試してください'); }
+  }
+}
+
+async function saveName(){
+  myName = document.getElementById('myname').value;
+  if(hasClaude){ try{ await window.storage.set('my-name', myName); }catch(e){} }
+  else { try{ localStorage.setItem('my-name', myName); }catch(e){} }
+  render();
+}
+
+function memberNames(){ return state.members.map(m=>m.name); }
+function mention(name, ping){
+  const mem = state.members.find(m=>m.name===name);
+  return (ping && mem && mem.discordId) ? `<@${mem.discordId}>` : `**${name}**`;
+}
+
+/* ---------- 描画 ---------- */
+function renderSelects(){
+  const my = document.getElementById('myname');
+  my.innerHTML = '<option value="">選んでね</option>' + state.members.map(m=>`<option ${m.name===myName?'selected':''}>${esc(m.name)}</option>`).join('');
+  const flt = document.getElementById('filterWho');
+  const fcur = flt.value;
+  flt.innerHTML = '<option value="">表示: すべて</option><option value="__mine__">表示: 自分の分</option>' + state.members.map(m=>`<option value="${esc(m.name)}">表示: ${esc(m.name)}</option>`).join('');
+  flt.value = fcur;
+  document.getElementById('namebar').innerHTML = '<span class="lbl">名前をタスクにドラッグで担当に追加 →</span>' +
+    `<span class="dragchip all" draggable="true" ondragstart="nameDragStart(event,'__all__')">全員</span>` +
+    state.members.map(m=>`<span class="dragchip" draggable="true" ondragstart="nameDragStart(event,'${esc(m.name)}')">${esc(m.name)}</span>`).join('');
+  document.getElementById('memlist').innerHTML = state.members.map((m,i)=>
+    `<span class="memchip">${esc(m.name)}${m.discordId?' 🔔':''}<button onclick="delMember(${i})" title="削除">×</button></span>`).join('') || '<span style="font-size:12px;color:var(--sub)">まだ登録されていません</span>';
+}
+
+function render(){
+  renderSelects();
+  const c0 = document.getElementById('c0'), c2 = document.getElementById('c2');
+  c0.innerHTML=''; c2.innerHTML='';
+  let n0=0, n2=0;
+  const today = todayStr(), tmr = tomorrowStr();
+  const f = document.getElementById('filterWho').value;
+  state.tasks.forEach(t=>{
+    if(f){
+      if(f==='__mine__'){ if(!t.whos.includes(myName)) return; }
+      else if(!t.whos.includes(f)) return;
+    }
+    const over = t.due && t.due < today && t.s!==2;
+    const soon = t.due && (t.due===today||t.due===tmr) && t.s!==2;
+    const multi = t.whos.length > 1;
+    const el = document.createElement('div');
+    el.className = 'task' + (t.s===2?' done':'');
+    el.setAttribute('draggable','true');
+    el.addEventListener('dragstart', e=>taskDragStart(e, t.id, el));
+    el.addEventListener('dragend', ()=>el.classList.remove('dragging'));
+    el.addEventListener('dragover', e=>{ if(dragName){ e.preventDefault(); el.classList.add('dropTarget'); } });
+    el.addEventListener('dragleave', ()=>el.classList.remove('dropTarget'));
+    el.addEventListener('drop', e=>nameDropOnTask(e, t.id, el));
+
+    let whoHtml;
+    if(t.whos.length === 0){
+      whoHtml = '<span class="who not">担当なし(名前をドラッグ)</span>';
+    } else if(multi && t.s!==2){
+      whoHtml = t.whos.map(m=>{
+        const d = t.doneBy.includes(m);
+        return `<span class="who ${d?'ok':'not'}">${d?'✓ ':''}${esc(m)}<span class="rm" onclick="removeWho('${t.id}','${esc(m)}')" title="担当から外す">×</span></span>`;
+      }).join('');
+    } else {
+      whoHtml = t.whos.map(m=>`<span class="who">${esc(m)}${t.s!==2?`<span class="rm" onclick="removeWho('${t.id}','${esc(m)}')" title="担当から外す">×</span>`:''}</span>`).join('');
+    }
+
+    let actsHtml;
+    if(t.s===2){
+      actsHtml = `<button class="bwd" onclick="move('${t.id}',0)">← 戻す</button>`;
+    } else if(multi){
+      const meDone = t.doneBy.includes(myName);
+      actsHtml = t.whos.includes(myName)
+        ? `<button class="fwd" onclick="toggleDone('${t.id}')">${meDone?'完了を取り消す':'自分は完了 ✓'}</button>`
+        : `<span style="font-size:11px;color:var(--sub);align-self:center">担当者がそれぞれチェックします</span>`;
+    } else {
+      actsHtml = `<button class="fwd" onclick="move('${t.id}',2)">完了にする ✓</button>`;
+    }
+
+    el.innerHTML = `
+      <div class="t">${esc(t.title)}</div>
+      ${t.memo?`<div class="memo">${esc(t.memo)}</div>`:''}
+      <div class="meta">
+        ${whoHtml}
+        ${t.due?`<span class="due ${over?'over':(soon?'soon':'')}">締切 ${t.due}${over?' (超過)':''}</span>`:''}
+      </div>
+      <div class="acts">
+        ${actsHtml}
+        ${t.s!==2?`<button class="edit" onclick="openEdit('${t.id}')">編集</button>`:''}
+        <button class="del" onclick="del('${t.id}')">削除</button>
+      </div>`;
+    if(t.s===2){ c2.appendChild(el); n2++; } else { c0.appendChild(el); n0++; }
+  });
+  document.getElementById('n0').textContent = n0;
+  document.getElementById('n2').textContent = n2;
+  if(n0===0) c0.innerHTML = '<div class="empty">タスクはありません</div>';
+  if(n2===0) c2.innerHTML = '<div class="empty">完了したタスクはここに入ります</div>';
+  const bd = document.getElementById('boarddot');
+  if(hasClaude){
+    bd.classList.add('on');
+    document.getElementById('boardlabel').textContent = 'ボード: Claude内共有';
+  } else {
+    bd.classList.toggle('on', !!boardId);
+    document.getElementById('boardlabel').textContent = boardId ? 'ボード: 接続中' : 'ボード: 未接続';
+  }
+  const hd = document.getElementById('hookdot');
+  hd.classList.toggle('on', !!state.webhook);
+  document.getElementById('hooklabel').textContent = state.webhook ? 'Discord通知: ON' : 'Discord通知: 未設定';
+}
+
+/* ---------- タスク操作 ---------- */
+async function addTask(){
+  const title = document.getElementById('newTitle').value.trim();
+  if(!title) return;
+  const due = document.getElementById('newDue').value || '';
+  const whos = myName ? [myName] : [];
+  const t = { id: 't'+Date.now()+Math.random().toString(36).slice(2,6), title, due, whos, doneBy: [], memo:'', s: 0, created: Date.now() };
+  state.tasks.unshift(t);
+  document.getElementById('newTitle').value='';
+  render(); await save();
+  sendHook(`📝 **${myName||'誰か'}** が新しいタスクを追加しました\n> ${title}` + (whos.length?`｜担当: ${whos.join('・')}`:'') + (due?`｜締切 ${due}`:''), title);
+}
+
+async function move(id, to){
+  const t = state.tasks.find(x=>x.id===id); if(!t) return;
+  t.s = to;
+  if(to===2){ t.doneAt = Date.now(); sendHook(`✅ **${myName||'誰か'}** がタスクを完了しました\n> ${t.title}`, t.title); }
+  else { delete t.doneAt; t.doneBy = []; }
+  render(); await save();
+}
+
+async function toggleDone(id){
+  if(!myName){ toast('先に名前を選んでください','右上の「自分」から選択してください'); return; }
+  const t = state.tasks.find(x=>x.id===id); if(!t) return;
+  if(t.doneBy.includes(myName)){
+    t.doneBy = t.doneBy.filter(m=>m!==myName);
+  } else {
+    t.doneBy.push(myName);
+    sendHook(`☑️ **${myName}** が「${t.title}」を完了しました（進捗: ${t.doneBy.filter(m=>t.whos.includes(m)).length}/${t.whos.length}人）`, t.title);
+    if(t.whos.length>0 && t.whos.every(m=>t.doneBy.includes(m))){
+      t.s = 2; t.doneAt = Date.now();
+      sendHook(`🎉 担当者全員が「${t.title}」を完了しました！`, 'おつかれさま！');
+    }
+  }
+  render(); await save();
+}
+
+async function removeWho(id, name){
+  const t = state.tasks.find(x=>x.id===id); if(!t) return;
+  t.whos = t.whos.filter(m=>m!==name);
+  t.doneBy = t.doneBy.filter(m=>m!==name);
+  if(t.s!==2 && t.whos.length>0 && t.whos.every(m=>t.doneBy.includes(m))){
+    t.s = 2; t.doneAt = Date.now();
+  }
+  render(); await save();
+}
+
+async function del(id){
+  state.tasks = state.tasks.filter(x=>x.id!==id);
+  render(); await save();
+}
+
+function openEdit(id){
+  const t = state.tasks.find(x=>x.id===id); if(!t) return;
+  editingId = id;
+  document.getElementById('editTitle').value = t.title;
+  document.getElementById('editDue').value = t.due || '';
+  document.getElementById('editMemo').value = t.memo || '';
+  dlgEdit.showModal();
+}
+
+async function saveEdit(){
+  const t = state.tasks.find(x=>x.id===editingId); if(!t){ dlgEdit.close(); return; }
+  const title = document.getElementById('editTitle').value.trim();
+  if(!title){ toast('タイトルを入力してください',''); return; }
+  t.title = title;
+  t.due = document.getElementById('editDue').value || '';
+  t.memo = document.getElementById('editMemo').value.trim();
+  dlgEdit.close();
+  render(); await save();
+  toast('保存しました', t.title);
+}
+
+/* ---------- メンバー ---------- */
+async function addMember(){
+  const v = document.getElementById('memInput').value.trim();
+  const id = document.getElementById('memIdInput').value.trim();
+  if(!v) return;
+  if(id && !/^\d{15,21}$/.test(id)){ toast('Discord IDは数字のみです','右クリック→「ユーザーIDをコピー」で取得した数字を貼ってください'); return; }
+  const existing = state.members.find(m=>m.name===v);
+  if(existing){ if(id) existing.discordId = id; toast('更新しました', v); }
+  else state.members.push({name: v, discordId: id});
+  document.getElementById('memInput').value='';
+  document.getElementById('memIdInput').value='';
+  renderSelects(); await save();
+}
+async function delMember(i){
+  state.members.splice(i,1);
+  renderSelects(); await save();
+}
+
+/* ---------- Discord ---------- */
+function openHook(){ document.getElementById('hookInput').value = state.webhook||''; dlgHook.showModal(); }
+async function saveHook(){
+  const url = document.getElementById('hookInput').value.trim();
+  if(url && !url.startsWith('https://discord.com/api/webhooks/') && !url.startsWith('https://discordapp.com/api/webhooks/')){
+    toast('URLの形式が違います','Discordのウェブフック URL を貼り付けてください'); return;
+  }
+  state.webhook = url;
+  dlgHook.close(); render(); await save();
+  toast(url?'Discord通知をONにしました':'Discord通知をOFFにしました', url?'タスクの追加・完了・締切が通知されます':'');
+}
+async function sendHook(content, short){
+  if(!state.webhook) return;
+  try{
+    const res = await fetch(state.webhook, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ content })
+    });
+    if(res.ok || res.status===204) toast('Discordに送信しました', short||'');
+    else toast('Discord送信に失敗しました','Webhook URLを確認してください');
+  }catch(e){
+    toast('Discord送信がブロックされました','この環境では外部送信が制限されている可能性があります');
+  }
+}
+
+/* ---------- ドラッグ&ドロップ ---------- */
+let dragTaskId = null;
+let dragName = null;
+
+function taskDragStart(e, id, el){
+  dragTaskId = id; dragName = null;
+  el.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function nameDragStart(e, name){
+  dragName = name; dragTaskId = null;
+  e.dataTransfer.effectAllowed = 'copy';
+}
+function colOver(e, col){
+  if(dragTaskId){ e.preventDefault(); col.classList.add('dragover'); }
+}
+function colLeave(col){ col.classList.remove('dragover'); }
+async function colDrop(e, col, to){
+  col.classList.remove('dragover');
+  if(!dragTaskId) return;
+  e.preventDefault();
+  const t = state.tasks.find(x=>x.id===dragTaskId);
+  dragTaskId = null;
+  if(!t || t.s===to) return;
+  if(to===2 && t.whos.length>1){
+    toast('複数人タスクは各自のチェックで完了します','担当者全員が「自分は完了✓」を押すと自動で移動します');
+    return;
+  }
+  await move(t.id, to);
+}
+async function nameDropOnTask(e, taskId, el){
+  el.classList.remove('dropTarget');
+  if(!dragName) return;
+  e.preventDefault();
+  const t = state.tasks.find(x=>x.id===taskId);
+  const name = dragName; dragName = null;
+  if(!t || t.s===2) return;
+  if(name === '__all__'){
+    const names = memberNames();
+    const added = names.filter(m=>!t.whos.includes(m));
+    if(added.length===0){ toast('全員すでに担当です',''); return; }
+    t.whos = [...new Set([...t.whos, ...names])];
+    toast('全員を担当に追加しました', t.title);
+  } else {
+    if(t.whos.includes(name)){ toast(`${name} はすでに担当です`,''); return; }
+    t.whos.push(name);
+    toast('担当に追加しました', `${t.title} ← ${name}`);
+  }
+  render(); await save();
+}
+
+load();
+setInterval(load, 15000);
+</script>
+</body>
+</html>

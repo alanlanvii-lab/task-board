@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ミーティア board — みんなのタスク管理</title>
+<title>めておらタスク管理</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1E2030">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=IBM+Plex+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -31,6 +36,8 @@ button.ghost{background:var(--panel);color:var(--sub);border:1px solid var(--lin
 .namebar .lbl{font-size:12px;color:var(--sub)}
 .dragchip{background:rgba(124,140,255,.16);color:var(--accent);border:1px solid var(--line);padding:4px 14px;border-radius:99px;font-size:13px;font-weight:500;cursor:grab;user-select:none}
 .dragchip:active{cursor:grabbing}
+.dragchip.sel{background:var(--accent);color:#161830;border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,140,255,.3)}
+.selhint{font-size:12px;color:var(--accent);font-weight:500}
 .dragchip.all{background:rgba(255,196,107,.16);color:var(--amber)}
 .board{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:0 22px 30px;align-items:start}
 .col{background:var(--panel);border-radius:16px;padding:14px;min-height:160px}
@@ -85,7 +92,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end}
 </head>
 <body>
 <header>
-  <h1>ミーティア <span>board</span></h1>
+  <h1>めておら<span>タスク管理</span></h1>
   <div class="hookdot" id="boarddot" onclick="openBoard()"><span class="dot"></span><span id="boardlabel">ボード: 未接続</span></div>
   <div class="hookdot" id="hookdot" onclick="openHook()"><span class="dot"></span><span id="hooklabel">Discord通知: 未設定</span></div>
   <div class="hookdot" onclick="dlgMem.showModal()">👥 メンバー管理</div>
@@ -295,6 +302,7 @@ async function load(manual){
 
 async function dailyReminder(){
   if(!state.webhook) return false;
+  if(new Date().getHours() < 9) return false; // 朝9時前は送らない
   const today = todayStr();
   if(state.lastReminder === today) return false;
   const tmr = tomorrowStr();
@@ -352,9 +360,10 @@ function renderSelects(){
   const fcur = flt.value;
   flt.innerHTML = '<option value="">表示: すべて</option><option value="__mine__">表示: 自分の分</option>' + state.members.map(m=>`<option value="${esc(m.name)}">表示: ${esc(m.name)}</option>`).join('');
   flt.value = fcur;
-  document.getElementById('namebar').innerHTML = '<span class="lbl">名前をタスクにドラッグで担当に追加 →</span>' +
-    `<span class="dragchip all" draggable="true" ondragstart="nameDragStart(event,'__all__')">全員</span>` +
-    state.members.map(m=>`<span class="dragchip" draggable="true" ondragstart="nameDragStart(event,'${esc(m.name)}')">${esc(m.name)}</span>`).join('');
+  const hint = selectedName ? `<span class="selhint">「${esc(selectedName==='__all__'?'全員':selectedName)}」を選択中 → タスクをタップで担当に追加(もう一度チップを押すと解除)</span>` : '<span class="lbl">名前をドラッグ、またはタップで選択 →</span>';
+  document.getElementById('namebar').innerHTML = hint +
+    `<span class="dragchip all ${selectedName==='__all__'?'sel':''}" draggable="true" ondragstart="nameDragStart(event,'__all__')" onclick="chipTap('__all__')">全員</span>` +
+    state.members.map(m=>`<span class="dragchip ${selectedName===m.name?'sel':''}" draggable="true" ondragstart="nameDragStart(event,'${esc(m.name)}')" onclick="chipTap('${esc(m.name)}')">${esc(m.name)}</span>`).join('');
   document.getElementById('memlist').innerHTML = state.members.map((m,i)=>
     `<span class="memchip">${esc(m.name)}${m.discordId?' 🔔':''}<button onclick="delMember(${i})" title="削除">×</button></span>`).join('') || '<span style="font-size:12px;color:var(--sub)">まだ登録されていません</span>';
 }
@@ -382,6 +391,11 @@ function render(){
     el.addEventListener('dragover', e=>{ if(dragName){ e.preventDefault(); el.classList.add('dropTarget'); } });
     el.addEventListener('dragleave', ()=>el.classList.remove('dropTarget'));
     el.addEventListener('drop', e=>nameDropOnTask(e, t.id, el));
+    el.addEventListener('click', e=>{
+      if(!selectedName) return;
+      if(e.target.closest('button') || e.target.closest('.rm')) return;
+      assignName(t.id, selectedName);
+    });
 
     let whoHtml;
     if(t.whos.length === 0){
@@ -585,12 +599,16 @@ async function colDrop(e, col, to){
   }
   await move(t.id, to);
 }
-async function nameDropOnTask(e, taskId, el){
-  el.classList.remove('dropTarget');
-  if(!dragName) return;
-  e.preventDefault();
+let selectedName = null;
+
+function chipTap(name){
+  // ドラッグ直後のclickは無視される(dragNameがnullになってから発火するため問題なし)
+  selectedName = (selectedName === name) ? null : name;
+  render();
+}
+
+async function assignName(taskId, name){
   const t = state.tasks.find(x=>x.id===taskId);
-  const name = dragName; dragName = null;
   if(!t || t.s===2) return;
   if(name === '__all__'){
     const names = memberNames();
@@ -606,8 +624,17 @@ async function nameDropOnTask(e, taskId, el){
   render(); await save();
 }
 
+async function nameDropOnTask(e, taskId, el){
+  el.classList.remove('dropTarget');
+  if(!dragName) return;
+  e.preventDefault();
+  const name = dragName; dragName = null;
+  await assignName(taskId, name);
+}
+
 load();
 setInterval(load, 15000);
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 </script>
 </body>
 </html>
